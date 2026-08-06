@@ -1,3 +1,8 @@
 .env
 __pycache__/
 *.pyc
+node_modules/
+dist/
+.env.local
+client/.env
+server/.env

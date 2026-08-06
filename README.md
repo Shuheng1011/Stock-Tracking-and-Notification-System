@@ -1,30 +1,39 @@
-# Stock dip monitor
+# Northstar Market Recap
 
-This starter project watches a list of stock tickers, checks whether their latest close dropped by a configurable percentage, and then looks at recent headlines to see whether sentiment is negative before sending a Pushover notification.
+A deployable MERN application whose first feature is an AI-assisted daily market recap.
 
-## Setup
+## Stack
 
-1. Create a virtual environment if you want.
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
+- React + Vite client
+- Node.js + Express API
+- MongoDB + Mongoose for optional recap persistence
+- Alpha Vantage for quotes, SerpAPI for headlines, and OpenAI for the written recap
+
+## Local setup
+
+1. Install Node.js 20 or newer.
+2. From the project folder, install dependencies:
+
+   ```powershell
+   npm install
+   npm run install:all
    ```
-3. Copy the example environment file and fill in your credentials:
-   ```bash
-   copy .env.example .env
+
+3. Copy your existing `.env` values into `server/.env`. Use `server/.env.example` as the template. `MONGODB_URI` is optional for local development.
+4. Run both applications:
+
+   ```powershell
+   npm run dev
    ```
-4. Run once:
-   ```bash
-   python stock_monitor.py AAPL MSFT TSLA --once
-   ```
 
-## Required services
+5. Open `http://localhost:5173`.
 
-- Pushover app token and user key
+## API
 
-## Notes
+`GET /api/recap?symbols=SPY,QQQ,DIA`
 
-- The script uses yfinance to fetch both stock history and recent Yahoo Finance headlines.
-- Sentiment is now powered by a Hugging Face model via the Transformers library.
-- The default model is ProsusAI/finbert, which is a strong general-purpose finance sentiment model.
-- For production use, you may still want to cache results, add rate limiting, or swap in a fine-tuned finance-specific model.
+The API accepts up to five tickers. Successful results are cached for five minutes to conserve third-party API quotas. API keys are never sent to the browser.
+
+## Deployment
+
+Deploy `client` to a static host such as Vercel and `server` to a Node host such as Render, Railway, or Fly.io. Set the server environment variables in the host dashboard, configure `CLIENT_ORIGIN` to the deployed client URL, and set the client's API routing or proxy to the deployed server URL.
