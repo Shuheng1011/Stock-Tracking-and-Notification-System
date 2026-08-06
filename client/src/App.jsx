@@ -27,16 +27,22 @@ export default function App() {
 
   return (
     <main>
-      <nav><div className="brand"><span>✦</span> NORTHSTAR</div><div className="status"><i /> MARKET INTELLIGENCE</div></nav>
+      <nav>
+        <div className="brand"><span>✦</span><b>NORTHSTAR</b></div>
+        <div className="nav-center"><a href="#recap">Overview</a><a href="#news">News</a></div>
+        <div className="status"><i /> LIVE</div>
+      </nav>
       <header>
-        <p className="eyebrow">DAILY BRIEFING</p>
-        <h1>The market, distilled.</h1>
-        <p className="lede">A focused read on today's movement across the symbols that matter to you.</p>
+        <div className="hero-copy">
+          <p className="eyebrow">DAILY BRIEFING</p>
+          <h1>Your market,<br />at a glance.</h1>
+          <p className="lede">Track today's movement and get a clear, AI-powered read on the symbols that matter to you.</p>
+        </div>
         <form onSubmit={(event) => { event.preventDefault(); loadRecap(); }}>
-          <label htmlFor="symbols">WATCHLIST</label>
+          <div className="form-heading"><label htmlFor="symbols">YOUR WATCHLIST</label><span>UP TO 5 SYMBOLS</span></div>
           <div className="search-row">
             <input id="symbols" value={symbols} onChange={(event) => setSymbols(event.target.value.toUpperCase())} placeholder="SPY, QQQ, DIA" />
-            <button disabled={loading}>{loading ? "GENERATING…" : "GENERATE RECAP →"}</button>
+            <button disabled={loading}>{loading ? "Generating…" : "Generate recap"}<span>→</span></button>
           </div>
         </form>
       </header>
@@ -45,7 +51,7 @@ export default function App() {
       {loading && !recap && <section className="loading">Gathering market signals…</section>}
       {recap && (
         <>
-          <section className="ticker-grid">
+          <section className="ticker-grid" aria-label="Market snapshot">
             {recap.market.map((item) => (
               <article className="ticker" key={item.symbol}>
                 <div><strong>{item.symbol}</strong><span>{item.tradingDay}</span></div>
@@ -55,14 +61,14 @@ export default function App() {
             ))}
           </section>
 
-          <section className="content-grid">
-            <article className="brief">
-              <div className="section-title"><span>01</span><h3>Today's recap</h3></div>
+          <section className="content-grid" id="recap">
+            <article className="brief panel">
+              <div className="section-title"><div className="icon">✦</div><h3>Today's recap</h3><span>AI SUMMARY</span></div>
               <div className="summary">{recap.summary}</div>
               <p className="timestamp">Generated {new Date(recap.generatedAt).toLocaleString()}{recap.cached ? " · Cached" : ""}</p>
             </article>
-            <aside>
-              <div className="section-title"><span>02</span><h3>In the news</h3></div>
+            <aside className="panel" id="news">
+              <div className="section-title"><div className="icon">↗</div><h3>In the news</h3><span>LATEST</span></div>
               {recap.headlines.length ? recap.headlines.map((story) => (
                 <a className="headline" href={story.link} target="_blank" rel="noreferrer" key={story.link}>
                   <small>{story.source || "MARKET NEWS"}</small><p>{story.title}</p><b>↗</b>
