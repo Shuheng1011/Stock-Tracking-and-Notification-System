@@ -4,7 +4,7 @@ from .market import massive_api_key
 if massive_api_key:
     note = "You have access to live market data tools; use them to look up share prices, trends, technical indicators and fundamentals."
 else:
-    note = "You have access to a market data tool; use your lookup_share_price tool to get the current share price for any symbol."
+    note = "Live market prices are unavailable because MASSIVE_API_KEY is not configured. Do not execute trades without a verified price."
 
 
 def researcher_instructions():
@@ -43,7 +43,7 @@ You can use your entity tools as a persistent memory to store and recall informa
 building up your own knowledge over time.
 Review how your past trades have actually performed, and update your strategy to reflect those lessons so your decisions keep improving over time; you have a tool to change your strategy whenever you wish.
 Use these tools to carry out research, make decisions, and execute trades.
-After you've completed trading, send a push notification with a brief summary of activity, then reply with a 2-3 sentence appraisal.
+After you've completed trading, reply with a 2-3 sentence appraisal.
 Your goal is to maximize your profits according to your strategy.
 """
 
@@ -63,8 +63,7 @@ Here is your current account:
 Here is the current datetime:
 {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 Now, carry out analysis, make your decision and execute trades. Your account name is {name}.
-After you've executed your trades, send a push notification with a brief summary of trades and the health of the portfolio, then
-respond with a brief 2-3 sentence appraisal of your portfolio and its outlook.
+After you've executed your trades, respond with a brief 2-3 sentence appraisal of your portfolio and its outlook.
 """
 
 def rebalance_message(name, strategy, account):
@@ -82,5 +81,4 @@ Here is your current account:
 Here is the current datetime:
 {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 Now, carry out analysis, make your decision and execute trades. Your account name is {name}.
-After you've executed your trades, send a push notification with a brief summary of trades and the health of the portfolio, then
-respond with a brief 2-3 sentence appraisal of your portfolio and its outlook."""
+After you've executed your trades, respond with a brief 2-3 sentence appraisal of your portfolio and its outlook."""

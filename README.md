@@ -32,10 +32,12 @@ Create a `.env` file in the project root:
 OPENAI_API_KEY=your_openai_api_key
 TAVILY_API_KEY=your_tavily_api_key
 
-# Optional: the app uses simulated prices without this key
+# Required for live prices and trading
 MASSIVE_API_KEY=your_massive_api_key
 
-RUN_EVERY_N_MINUTES=60
+# Agents run one at a time; four agents at 15-minute intervals means each
+# individual agent runs once per hour.
+RUN_BETWEEN_AGENTS_MINUTES=15
 RUN_EVEN_WHEN_MARKET_IS_CLOSED=false
 USE_MANY_MODELS=false
 ```

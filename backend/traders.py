@@ -18,7 +18,7 @@ from .mcp_servers import trader_mcp_servers, researcher_mcp_servers
 load_dotenv(override=True)
 
 deepseek_api_key = os.getenv("DEEPSEEK_API_KEY")
-google_api_key = os.getenv("GOOGLE_API_KEY")
+google_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 grok_api_key = os.getenv("GROK_API_KEY")
 openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
 
@@ -29,20 +29,37 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 MAX_TURNS = 30
 
-openrouter_client = AsyncOpenAI(base_url=OPENROUTER_BASE_URL, api_key=openrouter_api_key)
-deepseek_client = AsyncOpenAI(base_url=DEEPSEEK_BASE_URL, api_key=deepseek_api_key)
-grok_client = AsyncOpenAI(base_url=GROK_BASE_URL, api_key=grok_api_key)
-gemini_client = AsyncOpenAI(base_url=GEMINI_BASE_URL, api_key=google_api_key)
 
+def print_nested_error(error: BaseException, indent: int = 0) -> None:
+    """Print the concrete leaves hidden inside asyncio ExceptionGroups."""
+    prefix = "  " * indent
+    if isinstance(error, BaseExceptionGroup):
+        print(f"{prefix}{type(error).__name__}: {error}", flush=True)
+        for nested in error.exceptions:
+            print_nested_error(nested, indent + 1)
+    else:
+        print(f"{prefix}{type(error).__name__}: {error}", flush=True)
 
 def get_model(model_name: str):
     if "/" in model_name:
+        if not openrouter_api_key:
+            raise ValueError("OPENROUTER_API_KEY is required for OpenRouter models")
+        openrouter_client = AsyncOpenAI(base_url=OPENROUTER_BASE_URL, api_key=openrouter_api_key)
         return OpenAIChatCompletionsModel(model=model_name, openai_client=openrouter_client)
     elif "deepseek" in model_name:
+        if not deepseek_api_key:
+            raise ValueError("DEEPSEEK_API_KEY is required for DeepSeek models")
+        deepseek_client = AsyncOpenAI(base_url=DEEPSEEK_BASE_URL, api_key=deepseek_api_key)
         return OpenAIChatCompletionsModel(model=model_name, openai_client=deepseek_client)
     elif "grok" in model_name:
+        if not grok_api_key:
+            raise ValueError("GROK_API_KEY is required for Grok models")
+        grok_client = AsyncOpenAI(base_url=GROK_BASE_URL, api_key=grok_api_key)
         return OpenAIChatCompletionsModel(model=model_name, openai_client=grok_client)
     elif "gemini" in model_name:
+        if not google_api_key:
+            raise ValueError("GEMINI_API_KEY (or GOOGLE_API_KEY) is required for Gemini models")
+        gemini_client = AsyncOpenAI(base_url=GEMINI_BASE_URL, api_key=google_api_key)
         return OpenAIChatCompletionsModel(model=model_name, openai_client=gemini_client)
     else:
         return model_name
@@ -101,13 +118,27 @@ class Trader:
 
     async def run_with_mcp_servers(self):
         async with AsyncExitStack() as stack:
-            trader_servers = [
-                await stack.enter_async_context(server) for server in trader_mcp_servers()
-            ]
-            researcher_servers = [
-                await stack.enter_async_context(server)
-                for server in researcher_mcp_servers(self.name)
-            ]
+            trader_servers = []
+            for label, server in zip(
+                ["accounts", "market data"],
+                trader_mcp_servers(),
+            ):
+                print(f"{self.name}: connecting to {label} MCP server...", flush=True)
+                try:
+                    trader_servers.append(await stack.enter_async_context(server))
+                except Exception as error:
+                    raise RuntimeError(f"{label} MCP server failed to connect") from error
+
+            researcher_servers = []
+            for label, server in zip(
+                ["web fetch", "Tavily search", "memory"],
+                researcher_mcp_servers(self.name),
+            ):
+                print(f"{self.name}: connecting to {label} MCP server...", flush=True)
+                try:
+                    researcher_servers.append(await stack.enter_async_context(server))
+                except Exception as error:
+                    raise RuntimeError(f"{label} MCP server failed to connect") from error
             await self.run_agent(trader_servers, researcher_servers)
 
     async def run_with_trace(self):
@@ -120,5 +151,6 @@ class Trader:
         try:
             await self.run_with_trace()
         except Exception as e:
-            print(f"Error running trader {self.name}: {e}")
+            print(f"Error running trader {self.name}:", flush=True)
+            print_nested_error(e, 1)
         self.do_trade = not self.do_trade

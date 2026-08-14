@@ -1,13 +1,8 @@
-"""Share prices from the Massive market data API, or a simulator when no key is set.
-
-Set MASSIVE_API_KEY to use live data. Without it, prices come from market_simulator
-so the whole trading floor still runs out of the box.
-"""
+"""Live share prices from the Massive market data API."""
 
 import os
 from dotenv import load_dotenv
 from massive import RESTClient
-from .market_simulator import simulated_price
 
 load_dotenv(override=True)
 
@@ -34,35 +29,37 @@ plan_tier = 0
 
 
 def get_share_price(symbol: str) -> float:
-    """Return the current price for a symbol, from Massive or the simulator."""
-    if massive_api_key:
-        try:
-            return get_share_price_massive(symbol)
-        except Exception as e:
-            print(f"Massive API unavailable ({e}); using a simulated price")
-    return simulated_price(symbol)
+    """Return a live Massive price; never substitute simulated market data."""
+    if not massive_api_key:
+        raise RuntimeError("MASSIVE_API_KEY is required for live share prices")
+    return get_share_price_massive(symbol)
 
 
 def get_share_price_massive(symbol: str) -> float:
     """Best price the plan allows, remembering the working tier to avoid repeat failures."""
     global plan_tier
     client = RESTClient(massive_api_key)
+    last_error = None
     for tier in range(plan_tier, len(price_methods)):
         try:
             price = price_methods[tier](client, symbol)
+            if price <= 0:
+                raise ValueError(f"Massive returned an invalid price for {symbol}: {price}")
             plan_tier = tier
             return price
-        except Exception:
+        except Exception as error:
+            last_error = error
             continue
-    raise RuntimeError(f"No Massive price available for {symbol}")
+    raise RuntimeError(f"No live Massive price available for {symbol}") from last_error
 
 
 def is_market_open() -> bool:
-    """Whether the US market is open; True on simulated data or if Massive is unreachable."""
+    """Whether Massive reports that the US market is open."""
     if not massive_api_key:
-        return True
+        return False
     try:
         client = RESTClient(massive_api_key)
         return client.get_market_status().market == "open"
-    except Exception:
-        return True
+    except Exception as error:
+        print(f"Unable to read Massive market status: {error}")
+        return False

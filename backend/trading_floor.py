@@ -9,26 +9,19 @@ import os
 
 load_dotenv(override=True)
 
-RUN_EVERY_N_MINUTES = int(os.getenv("RUN_EVERY_N_MINUTES", "60"))
+RUN_BETWEEN_AGENTS_MINUTES = int(os.getenv("RUN_BETWEEN_AGENTS_MINUTES", "15"))
 RUN_EVEN_WHEN_MARKET_IS_CLOSED = (
     os.getenv("RUN_EVEN_WHEN_MARKET_IS_CLOSED", "false").strip().lower() == "true"
 )
-USE_MANY_MODELS = os.getenv("USE_MANY_MODELS", "false").strip().lower() == "true"
-
 names = ["Warren", "George", "Ray", "Cathie"]
 lastnames = ["Patience", "Bold", "Systematic", "Crypto"]
-
-if USE_MANY_MODELS:
-    model_names = [
-        "gpt-5.5",
-        "deepseek-v4-flash",
-        "gemini-3.5-flash",
-        "grok-4.3",
-    ]
-    short_model_names = ["GPT 5.5", "DeepSeek V4", "Gemini 3.5 Flash", "Grok 4.3"]
-else:
-    model_names = ["gpt-5.4-mini"] * 4
-    short_model_names = ["GPT 5.4 mini"] * 4
+model_names = [
+    "gpt-5.4-mini",
+    "gpt-5.4-mini",
+    "gpt-5.4-mini",
+    "gpt-5.4-mini",
+]
+short_model_names = ["GPT 5.4 mini"] * 4
 
 
 def create_traders() -> List[Trader]:
@@ -38,17 +31,27 @@ def create_traders() -> List[Trader]:
     return traders
 
 
-async def run_every_n_minutes():
+async def run_agents_in_turn():
     add_trace_processor(LogTracer())
     traders = create_traders()
     while True:
-        if RUN_EVEN_WHEN_MARKET_IS_CLOSED or is_market_open():
-            await asyncio.gather(*[trader.run() for trader in traders])
-        else:
-            print("Market is closed, skipping run")
-        await asyncio.sleep(RUN_EVERY_N_MINUTES * 60)
+        for trader in traders:
+            if RUN_EVEN_WHEN_MARKET_IS_CLOSED or is_market_open():
+                print(f"Running {trader.name}...", flush=True)
+                await trader.run()
+            else:
+                print(f"Market is closed, skipping {trader.name}", flush=True)
+
+            print(
+                f"Waiting {RUN_BETWEEN_AGENTS_MINUTES} minutes before the next agent...",
+                flush=True,
+            )
+            await asyncio.sleep(RUN_BETWEEN_AGENTS_MINUTES * 60)
 
 
 if __name__ == "__main__":
-    print(f"Starting scheduler to run every {RUN_EVERY_N_MINUTES} minutes")
-    asyncio.run(run_every_n_minutes())
+    print(
+        "Starting round-robin scheduler with "
+        f"{RUN_BETWEEN_AGENTS_MINUTES} minutes between agents"
+    )
+    asyncio.run(run_agents_in_turn())
