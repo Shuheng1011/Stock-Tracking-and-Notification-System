@@ -9,7 +9,13 @@ Run it from the 6_mcp directory so it shares the engine's accounts.db:
     uv run uvicorn backend.api:app --port 8000
 """
 
+import json
+import os
+import time
+from datetime import datetime, timezone
+
 from fastapi import FastAPI, HTTPException
+from openai import APIConnectionError, APITimeoutError, AuthenticationError, OpenAI, RateLimitError
 
 from backend import market
 from backend.accounts import Account
@@ -26,6 +32,8 @@ LOG_COLORS = {
     "account": "#dd0000",
 }
 DEFAULT_LOG_COLOR = "#87CEEB"
+SUMMARY_CACHE_SECONDS = 5 * 60
+summary_cache: dict[str, dict] = {}
 
 roster = [
     {"name": name, "lastname": lastname, "model_name": model_name}
@@ -69,6 +77,22 @@ def require_trader(name: str) -> dict:
     return trader
 
 
+def summary_signature(account: Account) -> str:
+    """A stable cache key that changes whenever the portfolio changes."""
+    latest_transaction = account.transactions[-1].timestamp if account.transactions else None
+    return json.dumps(
+        {
+            "balance": account.balance,
+            "holdings": account.holdings,
+            "transaction_count": len(account.transactions),
+            "latest_transaction": latest_transaction,
+            "strategy": account.strategy,
+        },
+        sort_keys=True,
+        default=str,
+    )
+
+
 @app.get("/api/traders")
 def get_traders() -> list[dict]:
     """The four traders on the floor."""
@@ -104,6 +128,78 @@ def get_trader(name: str) -> dict:
         "transactions": account.list_transactions(),
         "time_series": [{"datetime": ts, "value": value} for ts, value in account.portfolio_value_time_series],
     }
+
+
+@app.post("/api/traders/{name}/summary")
+def summarize_trader(name: str) -> dict:
+    """Generate a concise, factual summary of one paper-trading portfolio."""
+    trader = require_trader(name)
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="Portfolio summaries require OPENAI_API_KEY.")
+
+    account = Account.get(name)
+    signature = summary_signature(account)
+    cache_key = trader["name"].lower()
+    cached = summary_cache.get(cache_key)
+    now = time.time()
+    if (
+        cached
+        and cached["signature"] == signature
+        and now - cached["created_at"] < SUMMARY_CACHE_SECONDS
+    ):
+        return {**cached["payload"], "cached": True}
+
+    holdings = holdings_detail(account)
+    portfolio_value = account.balance + sum(item["market_value"] for item in holdings)
+    pnl = account.calculate_profit_loss(portfolio_value)
+    model_input = {
+        "trader": trader,
+        "cash": account.balance,
+        "portfolio_value": portfolio_value,
+        "profit_loss": pnl,
+        "holdings": holdings,
+        "recent_transactions": account.list_transactions()[-5:],
+        "strategy": account.strategy,
+    }
+
+    try:
+        client = OpenAI(api_key=api_key, timeout=30.0)
+        response = client.responses.create(
+            model=os.getenv("SUMMARY_MODEL", "gpt-5.4-mini"),
+            instructions=(
+                "Summarize this paper-trading portfolio using only the supplied data. "
+                "Explain its current value and cash allocation, principal holdings, total "
+                "profit or loss, and the most recent decision when one exists. Use no more "
+                "than three short paragraphs. Do not invent market events, imply unsupported "
+                "causation, give financial advice, or recommend a trade."
+            ),
+            input=json.dumps(model_input, default=str),
+        )
+    except AuthenticationError as error:
+        raise HTTPException(status_code=503, detail="The summary service is not configured correctly.") from error
+    except RateLimitError as error:
+        raise HTTPException(status_code=429, detail="The summary service is busy. Please try again shortly.") from error
+    except APITimeoutError as error:
+        raise HTTPException(status_code=504, detail="The summary request timed out. Please try again.") from error
+    except APIConnectionError as error:
+        raise HTTPException(status_code=502, detail="The summary service could not be reached.") from error
+
+    summary = response.output_text.strip()
+    if not summary:
+        raise HTTPException(status_code=502, detail="The summary service returned an empty response.")
+
+    payload = {
+        "summary": summary,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "cached": False,
+    }
+    summary_cache[cache_key] = {
+        "signature": signature,
+        "created_at": now,
+        "payload": payload,
+    }
+    return payload
 
 
 @app.get("/api/traders/{name}/logs")
