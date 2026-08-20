@@ -6,7 +6,7 @@ import { TraderPanel } from "./panel";
 import { TraderState } from "./state";
 import { initTheme } from "./theme";
 
-const DATA_POLL_MS = 6000;
+const DATA_POLL_MS = 60000;
 const LOG_POLL_MS = 2000;
 
 initTheme(document.getElementById("btn-theme") as HTMLButtonElement);
