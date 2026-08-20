@@ -52,9 +52,30 @@ export interface MarketInfo {
   is_market_open: boolean;
 }
 
+export interface PortfolioSummary {
+  summary: string;
+  generated_at: string;
+  cached: boolean;
+}
+
 async function get<T>(path: string): Promise<T> {
   const r = await fetch(path);
   if (!r.ok) throw new Error(`${path} failed: ${r.status}`);
+  return r.json() as Promise<T>;
+}
+
+async function post<T>(path: string): Promise<T> {
+  const r = await fetch(path, { method: "POST" });
+  if (!r.ok) {
+    let message = `${path} failed: ${r.status}`;
+    try {
+      const body = (await r.json()) as { detail?: string };
+      if (body.detail) message = body.detail;
+    } catch {
+      // Keep the status-based fallback when the response is not JSON.
+    }
+    throw new Error(message);
+  }
   return r.json() as Promise<T>;
 }
 
@@ -72,4 +93,8 @@ export function getTraderLogs(name: string, lastN = 13): Promise<LogRow[]> {
 
 export function getMarket(): Promise<MarketInfo> {
   return get("/api/market");
+}
+
+export function summarizeTrader(name: string): Promise<PortfolioSummary> {
+  return post(`/api/traders/${encodeURIComponent(name)}/summary`);
 }

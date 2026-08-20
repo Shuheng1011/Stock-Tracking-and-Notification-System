@@ -1,6 +1,6 @@
 // One trader's quadrant: header with value and profit, chart, heatmap, log.
 
-import type { LogRow } from "./api";
+import { summarizeTrader, type LogRow } from "./api";
 import { PortfolioChart } from "./chart";
 import { Heatmap } from "./heatmap";
 import { LogView } from "./log";
@@ -17,6 +17,8 @@ export class TraderPanel {
   private valueEl: HTMLElement;
   private pnlEl: HTMLElement;
   private strategyEl: HTMLElement;
+  private summaryButton: HTMLButtonElement;
+  private summaryEl: HTMLElement;
 
   constructor(state: TraderState) {
     this.state = state;
@@ -30,6 +32,10 @@ export class TraderPanel {
         <span class="panel-value" data-trend="flat">$0</span>
         <span class="panel-pnl"></span>
         <span class="panel-strategy"></span>
+        <div class="panel-summary">
+          <button class="summary-button" type="button">Summarize portfolio</button>
+          <div class="summary-output" role="status" aria-live="polite" hidden></div>
+        </div>
       </header>
       <div class="panel-chart"></div>
       <div class="panel-heatmap"></div>
@@ -49,6 +55,9 @@ export class TraderPanel {
     this.valueEl = this.root.querySelector(".panel-value")!;
     this.pnlEl = this.root.querySelector(".panel-pnl")!;
     this.strategyEl = this.root.querySelector(".panel-strategy")!;
+    this.summaryButton = this.root.querySelector(".summary-button")!;
+    this.summaryEl = this.root.querySelector(".summary-output")!;
+    this.summaryButton.addEventListener("click", () => void this.generateSummary());
     this.heatmap = new Heatmap(this.root.querySelector(".panel-heatmap")!);
     this.log = new LogView(this.root.querySelector(".panel-log")!);
     this.transactions = new TransactionsView(this.root.querySelector(".panel-transactions")!);
@@ -87,6 +96,36 @@ export class TraderPanel {
   setLeader(isLeader: boolean): void {
     if (isLeader) this.root.dataset.leader = "true";
     else delete this.root.dataset.leader;
+  }
+
+  private async generateSummary(): Promise<void> {
+    const name = this.state.info.name;
+    this.summaryButton.disabled = true;
+    this.summaryButton.textContent = "Generating…";
+    this.summaryEl.hidden = false;
+    this.summaryEl.dataset.state = "loading";
+    this.summaryEl.textContent = "Reviewing portfolio…";
+
+    try {
+      const result = await summarizeTrader(name);
+      const generated = new Date(result.generated_at).toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+      });
+      this.summaryEl.dataset.state = "success";
+      this.summaryEl.textContent = result.summary;
+      this.summaryEl.title = `${result.cached ? "Cached" : "Generated"} at ${generated}`;
+      this.summaryButton.textContent = "Refresh summary";
+    } catch (error) {
+      console.error(`summary failed for ${name}`, error);
+      this.summaryEl.dataset.state = "error";
+      this.summaryEl.textContent = error instanceof Error
+        ? error.message
+        : "The portfolio summary is temporarily unavailable.";
+      this.summaryButton.textContent = "Try again";
+    } finally {
+      this.summaryButton.disabled = false;
+    }
   }
 }
 
